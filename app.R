@@ -166,11 +166,42 @@ server <- function(input, output) {
     qbdata <- pbp |> 
       filter(full_name == input$qbchoose1, week >= input$weekchoose2[1] & week <= input$weekchoose2[2]) |> 
       group_by(full_name, defense_coverage_type) |>
-      summarise(
-        ### add stats here
-      )
+      summarise(EPAp = round(mean(epa, na.rm = T), 2),
+                CPOE = mean(cpoe, na.rm = T)/100,
+                att = sum(pass),
+                comp = sum(complete_pass),
+                comp_pct = (comp/att),
+                passyards = sum(receiving_yards, na.rm = T),
+                ypa = round((passyards/att), 2),
+                td = sum(pass_touchdown),
+                int = sum(interception),
+                YAC = sum(yards_after_catch, na.rm = T),
+                ADOT = round(mean(ngs_air_yards, na.rm = T), 2),
+                TTT = round(mean(time_to_throw, na.rm = T), 2),
+                .groups = "drop") |> 
+    arrange(-EPAp) |> 
+    select(-full_name) |> 
+      gt() |> 
+      gt_theme_538() |> 
+      cols_label(EPAp = "EPA/Play", att = "Attempts",
+                 comp = "Completions",comp_pct = "Completion %", passyards = "Passing Yards",
+                 CPOE = "CPOE", ypa = "YPA", YAC = "YAC", ADOT = "ADOT", TTT = "TTT",
+                 td = "TD", defense_coverage_type = "Coverage") |> 
+      cols_align(align = "center") |> 
+      fmt_percent(columns = c("CPOE","comp_pct"),
+                  decimals = 1) |> 
+      data_color(
+        columns = c("EPAp","att","comp","comp_pct","passyards",
+                    "ypa","YAC","ADOT","TTT","td"),
+        method = "numeric",
+        palette =  c("#e15759", "#ff9d9a", "white", "#8cd17d", "#59a14f"),
+        domain = NULL) |> 
+      opt_align_table_header(align = "center") |>
+      tab_options(table.font.size = 16)
+  
+      
     
-    ### add GT Table here
+
     
     
   }, height = 600, width = 850)
@@ -253,11 +284,38 @@ server <- function(input, output) {
     qbdata <- pbp |> 
       filter(defteam == input$defchoose1, week >= input$weekchoose4[1] & week <= input$weekchoose4[2]) |> 
       group_by(defteam, defense_coverage_type) |>
-      summarise(
-        ### add stats here
-      )
-    
-    ### add GT Table here
+      summarise(EPAp = round(mean(epa, na.rm = T), 2),
+                CPOE = round(mean(cpoe, na.rm = T), 3)/100,
+                att = sum(pass),
+                comp = sum(complete_pass, na.rm = T),
+                comp_pct = (comp/att),
+                passyards = sum(receiving_yards, na.rm = T),
+                YPA = round(mean(receiving_yards, na.rm = T), 2),
+                YAC = sum(yards_after_catch, na.rm = T),
+                ADOT = round(mean(ngs_air_yards, na.rm = T), 2),
+                TTT = round(mean(time_to_throw, na.rm = T), 2),
+                td = sum(pass_touchdown, na.rm = T),
+                INTs = sum(interception, na.rm = T),
+                .groups = "drop") |>
+      arrange(EPAp) |>  
+      select(-defteam) |> 
+      gt() |> 
+      gt_theme_538() |> 
+      cols_label(EPAp = "EPA/Play", att = "Attempts",
+                 comp = "Completions",comp_pct = "Completion %", passyards = "Passing Yards",
+                 CPOE = "CPOE", YPA = "YPA", YAC = "YAC", ADOT = "ADOT", TTT = "TTT",
+                 td = "TD", defense_coverage_type = "Coverage") |> 
+      cols_align(align = "center") |> 
+      fmt_percent(columns = c("CPOE","comp_pct"),
+                  decimals = 1) |> 
+      data_color(
+       columns = c("EPAp","att","comp","comp_pct","passyards",
+                  "YPA","YAC","ADOT","TTT","td"),
+      fn = scales::col_numeric(
+       palette =  c("#e15759", "#ff9d9a", "white", "#8cd17d", "#59a14f"),
+        domain = NULL)) |> 
+       opt_align_table_header(align = "center") |>
+      tab_options(table.font.size = 16)
     
     
   }, height = 600, width = 850)
