@@ -48,7 +48,7 @@ ui <- fluidPage(
                                  selectInput("coveragechoose1", "Coverage", c("Cover 0", "Cover 1", "Cover 2", "Cover 2 Man",
                                                                               "Cover 3", "Cover 4", "Cover 6"), selected = "Cover 1")),
                           column(4, align = "center",
-                                 numericInput("minDB", "Minimum Dropbacks", value = 15)),
+                                 numericInput("minDB", "Minimum Attempts", value = 15)),
                           column(4, align = "center",
                                  sliderInput("weekchoose1", "Weeks", value = c(1, 22), min = 1, max = 22)),
                           br(),
@@ -82,9 +82,25 @@ ui <- fluidPage(
                                  sliderInput("weekchoose4", "Weeks", value = c(1, 22), min = 1, max = 22)),
                           br(),
                           tableOutput("deftbl1"))),
+               tabPanel("Game Preview",
+                        fluidRow(
+                          column(4, align = 'center',
+                                 selectInput("qbchoose2", "Quarterback", c(sort(unique(as.character(qbs)))), selected = 'Brock Purdy')),
+                          column(4, align = 'center',
+                                 selectInput("defchoose2", "Defense", c(sort(unique(as.character(defenses)))), selected = 'BAL')),
+                          column(4, align = "center",
+                                 sliderInput("weekchoose5", "Weeks", value = c(1, 22), min = 1, max = 22)),
+                          tableOutput("qbtbl2"),
+                          tableOutput("deftbl2"))),
                tabPanel("About",
                         fluidRow(
                           column(12, align = "left",
+                                 tags$h5("Important note! Unfortunately, the public data set does not have pass coverage charted for any 
+                                         sacks or scrambles during a play. This will lead the EPA numbers to be skewed because we're taking away most of the 
+                                         negative plays a QB goes through, thus introducing selection bias. There's not much we can do about that, so while 
+                                         some of the efficiency numbers won't be exact, it still provides descriptive value we hope. Hence, we also included other 
+                                         counting stats like Yards Per Attempt (YPA), to try and try and contextualize things better."),
+                          br(),
                                  tags$h5("This entire app is built off the data stemming from the nflreadr package.
                                            Everything here is free data accessible by anyone, nothing comes from a paid
                                            subscription. The goal of the app is ultimately to give people the ability to 
@@ -144,7 +160,7 @@ server <- function(input, output) {
                                       cell = embed_img(),
                                       align = "center", sticky = 'left'),
                 percsnaps = colDef(name = "% of DBs", maxWidth = 65, align = "center", format = colFormat(percent = TRUE, digits = 1)),
-                EPAp = colDef(name = "EPA/Play", maxWidth = 85, align = "center",
+                EPAp = colDef(name = "EPA/Att", maxWidth = 85, align = "center",
                               cell = color_tiles(covqbs, colors = c("#e15759", "#ff9d9a", "white", "#8cd17d", "#59a14f"))),
                 CPOE = colDef(name = "CPOE", maxWidth = 75, align = "center", format = colFormat(percent = TRUE, digits = 1)),
                 attempts = colDef(name = "Attempts", maxWidth = 80, align = "center",
@@ -236,7 +252,7 @@ server <- function(input, output) {
       arrange(-att) |> 
       gt() |> 
       gt_theme_538() |> 
-      cols_label(EPAp = "EPA/Play", att = "Attempts",
+      cols_label(EPAp = "EPA/Att", att = "Attempts",
                  comp = "Completions",comp_pct = "Completion %", passyards = "Passing Yards",
                  CPOE = "CPOE", YPA = "YPA", YAC = "YAC", ADOT = "ADOT", TTT = "TTT",
                  td = "TD", defense_coverage_type = "Coverage") |> 
@@ -380,7 +396,7 @@ server <- function(input, output) {
                                         cell = embed_img(),
                                         align = "center", sticky = 'left'),
                 percsnaps = colDef(name = "% of Snaps", maxWidth = 65, align = "center", format = colFormat(percent = TRUE, digits = 1)),
-                EPAp = colDef(name = "EPA/Play", maxWidth = 85, align = "center",
+                EPAp = colDef(name = "EPA/Att", maxWidth = 85, align = "center",
                               cell = color_tiles(covdef, colors = c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"))),
                 CPOE = colDef(name = "CPOE", maxWidth = 75, align = "center", format = colFormat(percent = TRUE, digits = 1)),
                 attempts = colDef(name = "Attempts", maxWidth = 80, align = "center",
@@ -472,7 +488,7 @@ server <- function(input, output) {
       arrange(-att) |> 
       gt() |> 
       gt_theme_538() |> 
-      cols_label(EPAp = "EPA/Play", att = "Attempts",
+      cols_label(EPAp = "EPA/Att", att = "Attempts",
                  comp = "Completions",comp_pct = "Completion %", passyards = "Passing Yards",
                  CPOE = "CPOE", YPA = "YPA", YAC = "YAC", ADOT = "ADOT", TTT = "TTT",
                  td = "TD", defense_coverage_type = "Coverage") |> 
@@ -570,6 +586,340 @@ server <- function(input, output) {
     
     
   }, height = 600, width = 850)
+  
+  
+  output$qbtbl2 <- render_gt({
+    
+    lgavg <- pbp |> 
+      filter(week >= input$weekchoose5[1] & week <= input$weekchoose5[2]) |> 
+      group_by(full_name, defense_coverage_type) |>
+      summarise(EPAp = round(mean(epa, na.rm = T), 2),
+                CPOE = round(mean(cpoe, na.rm = T), 3)/100,
+                att = sum(pass),
+                comp = sum(complete_pass, na.rm = T),
+                comp_pct = (comp/att),
+                passyards = sum(receiving_yards, na.rm = T),
+                YPA = round(mean(receiving_yards, na.rm = T), 2),
+                YAC = sum(yards_after_catch, na.rm = T),
+                ADOT = round(mean(ngs_air_yards, na.rm = T), 2),
+                TTT = round(mean(time_to_throw, na.rm = T), 2),
+                td = sum(pass_touchdown, na.rm = T),
+                INTs = sum(interception, na.rm = T),
+                .groups = "drop") |> filter(defense_coverage_type != 'Other') |> 
+      ungroup() |> group_by(full_name) |> mutate(totpass = sum(att)) |> filter(totpass >= 100) |> 
+      group_by(defense_coverage_type) |> 
+      mutate(
+        EPArank = rank(-EPAp, ties.method = 'first'),
+        CPOErank = rank(-CPOE, ties.method = 'first'),
+        attrank = rank(-att, ties.method = 'first'),
+        comprank = rank(-comp, ties.method = 'first'),
+        comppctrank = rank(-comp_pct, ties.method = 'first'),
+        passyardsrank = rank(-passyards, ties.method = 'first'),
+        YPArank = rank(-YPA, ties.method = 'first'),
+        YACrank = rank(-YAC, ties.method = 'first'),
+        ADOTrank = rank(-ADOT, ties.method = 'first'),
+        TTTrank = rank(TTT, ties.method = 'first'),
+        TDrank = rank(-td, ties.method = 'average'),
+        INTsrank = rank(INTs, ties.method = 'average')
+      ) |> 
+      filter(full_name == input$qbchoose2) |> 
+      select(full_name, defense_coverage_type, EPArank, CPOErank, attrank, comprank, comppctrank,
+             passyardsrank, YPArank, YACrank, ADOTrank, TTTrank, TDrank, INTsrank) 
+    
+    qbdata <- pbp |> 
+      filter(full_name == input$qbchoose2, week >= input$weekchoose5[1] & week <= input$weekchoose5[2]) |> 
+      group_by(full_name, defense_coverage_type) |>
+      summarise(EPAp = round(mean(epa, na.rm = T), 2),
+                CPOE = round(mean(cpoe, na.rm = T), 3)/100,
+                att = sum(pass),
+                comp = sum(complete_pass, na.rm = T),
+                comp_pct = (comp/att),
+                passyards = sum(receiving_yards, na.rm = T),
+                YPA = round(mean(receiving_yards, na.rm = T), 2),
+                YAC = sum(yards_after_catch, na.rm = T),
+                ADOT = round(mean(ngs_air_yards, na.rm = T), 2),
+                TTT = round(mean(time_to_throw, na.rm = T), 2),
+                td = sum(pass_touchdown, na.rm = T),
+                INTs = sum(interception, na.rm = T),
+                .groups = "drop") |> filter(defense_coverage_type != 'Other') |> 
+      arrange(EPAp)
+    
+    both <- left_join(qbdata, lgavg, by = c('full_name', 'defense_coverage_type'))
+    
+    both |> 
+      ungroup() |> 
+      select(-full_name) |>
+      arrange(-att) |> 
+      gt() |> 
+      gt_theme_538() |> 
+      cols_label(EPAp = "EPA/Att", att = "Attempts",
+                 comp = "Completions",comp_pct = "Completion %", passyards = "Passing Yards",
+                 CPOE = "CPOE", YPA = "YPA", YAC = "YAC", ADOT = "ADOT", TTT = "TTT",
+                 td = "TD", defense_coverage_type = "Coverage") |> 
+      cols_align(align = "center") |> 
+      fmt_percent(columns = c("CPOE","comp_pct"),
+                  decimals = 1) |> 
+      data_color(
+        target_columns = EPAp,
+        columns = EPArank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = CPOE,
+        columns = CPOErank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = att,
+        columns = attrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = comp,
+        columns = comprank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = comp_pct,
+        columns = comppctrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = passyards,
+        columns = passyardsrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = YPA,
+        columns = YPArank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = YAC,
+        columns = YACrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = ADOT,
+        columns = ADOTrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = TTT,
+        columns = TTTrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = td,
+        columns = TDrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      data_color(
+        target_columns = INTs,
+        columns = INTsrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = NULL)
+      ) |> 
+      cols_hide(c(EPArank, CPOErank, attrank, comprank, comppctrank, passyardsrank, YPArank, YACrank, ADOTrank, TTTrank, TDrank, INTsrank)) |> 
+      opt_align_table_header(align = "center") |>
+      tab_options(table.font.size = 16) |> 
+      tab_header(
+        title = paste(input$qbchoose2, "vs each coverage"),
+        subtitle = "Color schemes for each column based on where team ranks compared to rest of league: Green = good, red = bad"
+      )
+    
+    
+  }, width = 850)
+  
+  
+  output$deftbl2 <- render_gt({
+    
+    lgavg <- pbp |> 
+      filter(week >= input$weekchoose5[1] & week <= input$weekchoose5[2]) |> 
+      group_by(defteam, defense_coverage_type) |>
+      summarise(EPAp = round(mean(epa, na.rm = T), 2),
+                CPOE = round(mean(cpoe, na.rm = T), 3)/100,
+                att = sum(pass),
+                comp = sum(complete_pass, na.rm = T),
+                comp_pct = (comp/att),
+                passyards = sum(receiving_yards, na.rm = T),
+                YPA = round(mean(receiving_yards, na.rm = T), 2),
+                YAC = sum(yards_after_catch, na.rm = T),
+                ADOT = round(mean(ngs_air_yards, na.rm = T), 2),
+                TTT = round(mean(time_to_throw, na.rm = T), 2),
+                td = sum(pass_touchdown, na.rm = T),
+                INTs = sum(interception, na.rm = T),
+                .groups = "drop") |> filter(defense_coverage_type != 'Other') |> 
+      group_by(defense_coverage_type) |> 
+      mutate(
+        EPArank = rank(EPAp, ties.method = 'first'),
+        CPOErank = rank(CPOE, ties.method = 'first'),
+        attrank = rank(att, ties.method = 'first'),
+        comprank = rank(comp, ties.method = 'first'),
+        comppctrank = rank(comp_pct, ties.method = 'first'),
+        passyardsrank = rank(passyards, ties.method = 'first'),
+        YPArank = rank(YPA, ties.method = 'first'),
+        YACrank = rank(YAC, ties.method = 'first'),
+        ADOTrank = rank(ADOT, ties.method = 'first'),
+        TTTrank = rank(-TTT, ties.method = 'first'),
+        TDrank = rank(td, ties.method = 'average'),
+        INTsrank = rank(-INTs, ties.method = 'average')
+      ) |> filter(defteam == input$defchoose2) |> 
+      select(defteam, defense_coverage_type, EPArank, CPOErank, attrank, comprank, comppctrank,
+             passyardsrank, YPArank, YACrank, ADOTrank, TTTrank, TDrank, INTsrank) 
+    
+    qbdata <- pbp |> 
+      filter(defteam == input$defchoose2, week >= input$weekchoose5[1] & week <= input$weekchoose5[2]) |> 
+      group_by(defteam, defense_coverage_type) |>
+      summarise(EPAp = round(mean(epa, na.rm = T), 2),
+                CPOE = round(mean(cpoe, na.rm = T), 3)/100,
+                att = sum(pass),
+                comp = sum(complete_pass, na.rm = T),
+                comp_pct = (comp/att),
+                passyards = sum(receiving_yards, na.rm = T),
+                YPA = round(mean(receiving_yards, na.rm = T), 2),
+                YAC = sum(yards_after_catch, na.rm = T),
+                ADOT = round(mean(ngs_air_yards, na.rm = T), 2),
+                TTT = round(mean(time_to_throw, na.rm = T), 2),
+                td = sum(pass_touchdown, na.rm = T),
+                INTs = sum(interception, na.rm = T),
+                .groups = "drop") |> filter(defense_coverage_type != 'Other') |> 
+      arrange(EPAp)
+    
+    both <- left_join(qbdata, lgavg, by = c('defteam', 'defense_coverage_type'))
+    
+    
+    
+    both |> 
+      ungroup() |> 
+      select(-defteam) |> 
+      arrange(-att) |> 
+      gt() |> 
+      gt_theme_538() |> 
+      cols_label(EPAp = "EPA/Att", att = "Attempts",
+                 comp = "Completions",comp_pct = "Completion %", passyards = "Passing Yards",
+                 CPOE = "CPOE", YPA = "YPA", YAC = "YAC", ADOT = "ADOT", TTT = "TTT",
+                 td = "TD", defense_coverage_type = "Coverage") |> 
+      cols_align(align = "center") |> 
+      fmt_percent(columns = c("CPOE","comp_pct"),
+                  decimals = 1) |> 
+      data_color(
+        target_columns = EPAp,
+        columns = EPArank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = CPOE,
+        columns = CPOErank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = att,
+        columns = attrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = comp,
+        columns = comprank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = comp_pct,
+        columns = comppctrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = passyards,
+        columns = passyardsrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = YPA,
+        columns = YPArank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = YAC,
+        columns = YACrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = ADOT,
+        columns = ADOTrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = TTT,
+        columns = TTTrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = td,
+        columns = TDrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      data_color(
+        target_columns = INTs,
+        columns = INTsrank,
+        fn = scales::col_numeric(
+          palette =  c("#59a14f", "#8cd17d",  "white", "#ff9d9a", "#e15759"),
+          domain = c(1, 32))
+      ) |> 
+      cols_hide(c(EPArank, CPOErank, attrank, comprank, comppctrank, passyardsrank, YPArank, YACrank, ADOTrank, TTTrank, TDrank, INTsrank)) |> 
+      opt_align_table_header(align = "center") |>
+      tab_options(table.font.size = 16) |> 
+      tab_header(
+        title = paste(input$defchoose2, "running each coverage"),
+        subtitle = "Color schemes for each column based on where team ranks compared to rest of league: Green = good, red = bad"
+      )
+    
+    
+  }, width = 850)
   
 }
 
